@@ -1,1 +1,47 @@
+name: CD-ML-Deploy
 
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "models/**"
+
+jobs:
+  deploy-model:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Install Azure ML CLI
+      run: |
+        az extension add -n ml -y
+
+    - name: Register model
+      run: |
+        az ml model create \
+          --name iris-model \
+          --type mlflow_model \
+          --path ./models \
+          --workspace-name ${{ secrets.AML_WORKSPACE }} \
+          --resource-group ${{ secrets.AML_RG }}
+
+    - name: Deploy as endpoint
+      run: |
+        az ml online-endpoint create \
+          --name iris-endpoint \
+          --workspace-name ${{ secrets.AML_WORKSPACE }} \
+          --resource-group ${{ secrets.AML_RG }} || true
+
+        az ml online-deployment create \
+          --name blue \
+          --endpoint iris-endpoint \
+          --model iris-model:1 \
+          --instance-type Standard_DS2_v2 \
+          --workspace-name ${{ secrets.AML_WORKSPACE }} \
+          --resource-group ${{ secrets.AML_RG }}
