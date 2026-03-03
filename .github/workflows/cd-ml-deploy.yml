@@ -95,15 +95,14 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    - name: Deploy as endpoint (blue, 100% traffic)
+    - name: Deploy as endpoint (blue)
       run: |
+        sed -i "s/version: 1/version: ${{ steps.model.outputs.version }}/" aml-deploy/blue-deployment.yml
+
         az ml online-deployment create \
-          --name blue \
-          --endpoint iris-endpoint \
-          --model iris-model:${{ steps.model.outputs.version }} \
-          --instance-type Standard_DS2_v2 \
-          --workspace-name "$AML_WORKSPACE" \
+          --file aml-deploy/blue-deployment.yml \
           --resource-group "$AML_RG" \
+          --workspace-name "$AML_WORKSPACE" \
           --all-traffic
       env:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
