@@ -1,15 +1,12 @@
 name: CD-ML-Deploy
 
 on:
-  # Starte CD automatisch, wenn der CI-Workflow abgeschlossen ist
   workflow_run:
     workflows: ["CI-ML-Pipeline"]   # <- exakt wie in deiner ci-ml.yml
     types: [completed]
 
-  # Optional: zusätzlich manuell startbar (z. B. für Re-Deploys)
   workflow_dispatch:
 
-# Ermöglicht Zugriff auf Artefakte anderer Runs + verhindert parallele Deploys
 permissions:
   actions: read
   contents: read
@@ -20,7 +17,6 @@ concurrency:
 
 jobs:
   deploy-model:
-    # Nur ausführen, wenn der CI-Run erfolgreich war und durch 'push' ausgelöst wurde
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
     runs-on: ubuntu-latest
 
@@ -43,15 +39,18 @@ jobs:
     - name: Install Azure ML CLI
       run: az extension add -n ml -y
 
-    # 🔽 Artefakt aus DEM CI-Run laden, der diese CD getriggert hat
-    - name: Download MLflow model artifact from CI run
-      uses: actions/download-artifact@v4
+    # 🔥 Der wichtige Fix:
+    # Holt das Artefakt aus dem NEUESTEN erfolgreichen CI-Run.
+    - name: Download MLflow model artifact (robust)
+      uses: dawidd6/action-download-artifact@v6
       with:
-        name: mlflow-model          # <- muss exakt dem Upload-Namen in CI entsprechen
-        path: models
-        run-id: ${{ github.event.workflow_run.id }}
+        workflow: CI-ML-Pipeline        # <- CI-Workflow-Name
+        name: mlflow-model              # <- exakt wie im CI-Upload
+        path: models                    # <- wird hier extrahiert
+        branch: main                    # <- dein CI läuft auf main
+        workflow_conclusion: success    # <- nur erfolgreiche CI-Runs
 
-    # Sanity-Check für Secrets (leakt keine Inhalte)
+    # Debug: leakt keine Werte
     - name: Debug inputs (sanitized)
       run: |
         echo "Workspace: ${AML_WORKSPACE:+SET}"
@@ -82,7 +81,7 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # Optional: stets die neueste registrierte Modellversion deployen
+    # Finde die neueste Modellversion aus der Registry
     - name: Resolve latest model version
       id: model
       run: |
