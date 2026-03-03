@@ -24,6 +24,12 @@ jobs:
     - name: Install Azure ML CLI
       run: |
         az extension add -n ml -y
+    
+    - name: Download MLflow model artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: mlflow-model
+        path: models
 
     - name: Register model
       run: |
