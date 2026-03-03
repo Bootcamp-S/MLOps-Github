@@ -1,20 +1,33 @@
 name: CD-ML-Deploy
 
 on:
-  workflow_dispatch:
-  push:
-    branches: ["main"]
-    paths:
-      - "models/**"
-      - "aml-deploy/**"
+  # CD wird automatisch gestartet, wenn der CI-Workflow erfolgreich durchläuft
+  workflow_run:
+    workflows: ["CI-ML-Pipeline"]   # <- Muss exakt dem 'name:' in deiner ci-ml.yml entsprechen
+    types: [completed]
 
+  # Optional zusätzlich manuell startbar
+  workflow_dispatch:
+
+# Damit der Job Artefakte aus anderen Runs lesen darf
+permissions:
+  actions: read
+  contents: read
+
+# Verhindert parallele Deployments (z. B. bei vielen Commits)
+concurrency:
+  group: cd-ml-deploy
+  cancel-in-progress: true
 
 jobs:
   deploy-model:
+    # Nur starten, wenn der CI-Run erfolgreich war
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
     - name: Azure Login
       uses: azure/login@v2
@@ -22,35 +35,60 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Install Azure ML CLI
-      run: |
-        az extension add -n ml -y
-    
-    - name: Download MLflow model artifact
+      run: az extension add -n ml -y
+
+    # 🔽 Artefakt aus dem CI-Run mit derselben run-id laden
+    - name: Download MLflow model artifact from CI run
       uses: actions/download-artifact@v4
       with:
-        name: mlflow-model
+        name: mlflow-model            # <- Name muss exakt dem Upload-Namen in CI entsprechen
         path: models
+        run-id: ${{ github.event.workflow_run.id }}
 
+    # Kurzer Check, ob Secrets befüllt sind (leakt keine Werte)
+    - name: Debug inputs (sanitized)
+      run: |
+        echo "Workspace: ${AML_WORKSPACE:+SET}"
+        echo "Resource Group: ${AML_RG:+SET}"
+      env:
+        AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+        AML_RG: ${{ secrets.AML_RG }}
+
+    # Registrierung des MLflow-Modells aus ./models in Azure ML
     - name: Register model
       run: |
         az ml model create \
           --name iris-model \
           --type mlflow_model \
           --path ./models \
-          --workspace-name ${{ secrets.AML_WORKSPACE }} \
-          --resource-group ${{ secrets.AML_RG }}
+          --workspace-name "$AML_WORKSPACE" \
+          --resource-group "$AML_RG"
+      env:
+        AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+        AML_RG: ${{ secrets.AML_RG }}
 
-    - name: Deploy as endpoint
+    # Endpoint einmalig anlegen (idempotent)
+    - name: Create endpoint (idempotent)
       run: |
         az ml online-endpoint create \
           --name iris-endpoint \
-          --workspace-name ${{ secrets.AML_WORKSPACE }} \
-          --resource-group ${{ secrets.AML_RG }} || true
+          --workspace-name "$AML_WORKSPACE" \
+          --resource-group "$AML_RG" || true
+      env:
+        AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+        AML_RG: ${{ secrets.AML_RG }}
 
+    # Deployment der neuesten Modellversion auf den Endpoint
+    - name: Deploy as endpoint
+      run: |
         az ml online-deployment create \
           --name blue \
           --endpoint iris-endpoint \
           --model iris-model:1 \
           --instance-type Standard_DS2_v2 \
-          --workspace-name ${{ secrets.AML_WORKSPACE }} \
-          --resource-group ${{ secrets.AML_RG }}
+          --workspace-name "$AML_WORKSPACE" \
+          --resource-group "$AML_RG" \
+          --all-traffic
+      env:
+        AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+        AML_RG: ${{ secrets.AML_RG }}
