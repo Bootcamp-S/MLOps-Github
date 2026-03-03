@@ -20,3 +20,9 @@ jobs:
     - name: Train model
       run: |
         python src/train.py
+
+    - name: Upload MLflow model artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: mlflow-model
+        path: models
