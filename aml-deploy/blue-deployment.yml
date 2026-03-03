@@ -8,7 +8,7 @@ environment:
   name: iris-sklearn-env
   image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04
 code_configuration:
-  code: ./src
+  code: ../src
   scoring_script: inference.py
 instance_type: Standard_DS2_v2
 instance_count: 1
