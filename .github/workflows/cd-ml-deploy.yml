@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   deploy-model:
+    # Condition vereinfacht: CI muss erfolgreich sein
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -38,7 +40,7 @@ jobs:
     - name: Install Azure ML CLI
       run: az extension add -n ml -y
 
-    - name: Download MLflow model artifact (robust)
+    - name: Download MLflow model artifact
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: ci-ml.yml
@@ -46,14 +48,6 @@ jobs:
         path: models
         branch: main
         workflow_conclusion: success
-
-    - name: Debug inputs (sanitized)
-      run: |
-        echo "Workspace: ${AML_WORKSPACE:+SET}"
-        echo "Resource Group: ${AML_RG:+SET}"
-      env:
-        AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-        AML_RG: ${{ secrets.AML_RG }}
 
     - name: Register model
       run: |
@@ -67,10 +61,13 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # 🔥 Der EINZIGE Create-Endpoint-Step (korrekt platziert)
+    # -------------------------------------------------------------
+    # ⭐ WICHTIG: Der EINZIGE, KORREKT platzierte Create Endpoint Step
+    # -------------------------------------------------------------
+
     - name: Create endpoint (idempotent)
       run: |
-        echo "Ensuring iris-endpoint exists..."
+        echo "Creating iris-endpoint if it does not exist..."
         az ml online-endpoint create \
           --name iris-endpoint \
           --workspace-name "$AML_WORKSPACE" \
@@ -78,6 +75,8 @@ jobs:
       env:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
+
+    # -------------------------------------------------------------
 
     - name: Resolve latest model version
       id: model
@@ -98,8 +97,8 @@ jobs:
 
         az ml online-deployment create \
           --file aml-deploy/blue-deployment.yml \
-          --resource-group "$AML_RG" \
           --workspace-name "$AML_WORKSPACE" \
+          --resource-group "$AML_RG" \
           --all-traffic
       env:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
