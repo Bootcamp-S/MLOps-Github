@@ -1,33 +1,39 @@
 name: CD-ML-Deploy
 
 on:
-  # CD wird automatisch gestartet, wenn der CI-Workflow erfolgreich durchläuft
+  # Starte CD automatisch, wenn der CI-Workflow abgeschlossen ist
   workflow_run:
-    workflows: ["CI-ML-Pipeline"]   # <- Muss exakt dem 'name:' in deiner ci-ml.yml entsprechen
+    workflows: ["CI-ML-Pipeline"]   # <- exakt wie in deiner ci-ml.yml
     types: [completed]
 
-  # Optional zusätzlich manuell startbar
+  # Optional: zusätzlich manuell startbar (z. B. für Re-Deploys)
   workflow_dispatch:
 
-# Damit der Job Artefakte aus anderen Runs lesen darf
+# Ermöglicht Zugriff auf Artefakte anderer Runs + verhindert parallele Deploys
 permissions:
   actions: read
   contents: read
 
-# Verhindert parallele Deployments (z. B. bei vielen Commits)
 concurrency:
   group: cd-ml-deploy
   cancel-in-progress: true
 
 jobs:
   deploy-model:
-    # Nur starten, wenn der CI-Run erfolgreich war
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Nur ausführen, wenn der CI-Run erfolgreich war und durch 'push' ausgelöst wurde
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Show triggering workflow_run info
+      run: |
+        echo "Triggered by workflow: ${{ github.event.workflow_run.name }}"
+        echo "Conclusion:           ${{ github.event.workflow_run.conclusion }}"
+        echo "Event:                ${{ github.event.workflow_run.event }}"
+        echo "CI run-id:            ${{ github.event.workflow_run.id }}"
 
     - name: Azure Login
       uses: azure/login@v2
@@ -37,15 +43,15 @@ jobs:
     - name: Install Azure ML CLI
       run: az extension add -n ml -y
 
-    # 🔽 Artefakt aus dem CI-Run mit derselben run-id laden
+    # 🔽 Artefakt aus DEM CI-Run laden, der diese CD getriggert hat
     - name: Download MLflow model artifact from CI run
       uses: actions/download-artifact@v4
       with:
-        name: mlflow-model            # <- Name muss exakt dem Upload-Namen in CI entsprechen
+        name: mlflow-model          # <- muss exakt dem Upload-Namen in CI entsprechen
         path: models
         run-id: ${{ github.event.workflow_run.id }}
 
-    # Kurzer Check, ob Secrets befüllt sind (leakt keine Werte)
+    # Sanity-Check für Secrets (leakt keine Inhalte)
     - name: Debug inputs (sanitized)
       run: |
         echo "Workspace: ${AML_WORKSPACE:+SET}"
@@ -54,7 +60,6 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # Registrierung des MLflow-Modells aus ./models in Azure ML
     - name: Register model
       run: |
         az ml model create \
@@ -67,7 +72,6 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # Endpoint einmalig anlegen (idempotent)
     - name: Create endpoint (idempotent)
       run: |
         az ml online-endpoint create \
@@ -78,13 +82,26 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # Deployment der neuesten Modellversion auf den Endpoint
-    - name: Deploy as endpoint
+    # Optional: stets die neueste registrierte Modellversion deployen
+    - name: Resolve latest model version
+      id: model
+      run: |
+        VER=$(az ml model list \
+          --name iris-model \
+          --workspace-name "$AML_WORKSPACE" \
+          --resource-group "$AML_RG" \
+          --query "[].version | max(@)" -o tsv)
+        echo "version=$VER" >> $GITHUB_OUTPUT
+      env:
+        AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+        AML_RG: ${{ secrets.AML_RG }}
+
+    - name: Deploy as endpoint (blue, 100% traffic)
       run: |
         az ml online-deployment create \
           --name blue \
           --endpoint iris-endpoint \
-          --model iris-model:1 \
+          --model iris-model:${{ steps.model.outputs.version }} \
           --instance-type Standard_DS2_v2 \
           --workspace-name "$AML_WORKSPACE" \
           --resource-group "$AML_RG" \
