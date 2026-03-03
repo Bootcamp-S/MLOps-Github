@@ -44,7 +44,7 @@ jobs:
     - name: Download MLflow model artifact (robust)
       uses: dawidd6/action-download-artifact@v6
       with:
-        workflow: CI-ML-Pipeline        # <- CI-Workflow-Name
+        workflow: ci-ml.yml        # <- CI-Workflow-Name
         name: mlflow-model              # <- exakt wie im CI-Upload
         path: models                    # <- wird hier extrahiert
         branch: main                    # <- dein CI läuft auf main
