@@ -2,7 +2,7 @@ name: CD-ML-Deploy
 
 on:
   workflow_run:
-    workflows: ["CI-ML-Pipeline"]   # <- exakt wie in deiner ci-ml.yml
+    workflows: ["CI-ML-Pipeline"]
     types: [completed]
 
   workflow_dispatch:
@@ -39,18 +39,15 @@ jobs:
     - name: Install Azure ML CLI
       run: az extension add -n ml -y
 
-    # 🔥 Der wichtige Fix:
-    # Holt das Artefakt aus dem NEUESTEN erfolgreichen CI-Run.
     - name: Download MLflow model artifact (robust)
       uses: dawidd6/action-download-artifact@v6
       with:
-        workflow: ci-ml.yml        # <- CI-Workflow-Name
-        name: mlflow-model              # <- exakt wie im CI-Upload
-        path: models                    # <- wird hier extrahiert
-        branch: main                    # <- dein CI läuft auf main
-        workflow_conclusion: success    # <- nur erfolgreiche CI-Runs
+        workflow: ci-ml.yml
+        name: mlflow-model
+        path: models
+        branch: main
+        workflow_conclusion: success
 
-    # Debug: leakt keine Werte
     - name: Debug inputs (sanitized)
       run: |
         echo "Workspace: ${AML_WORKSPACE:+SET}"
@@ -71,8 +68,10 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
+    # 🔥 Der EINZIGE Create-Endpoint-Step (korrekt platziert)
     - name: Create endpoint (idempotent)
       run: |
+        echo "Ensuring iris-endpoint exists..."
         az ml online-endpoint create \
           --name iris-endpoint \
           --workspace-name "$AML_WORKSPACE" \
@@ -81,7 +80,6 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # Finde die neueste Modellversion aus der Registry
     - name: Resolve latest model version
       id: model
       run: |
@@ -91,17 +89,6 @@ jobs:
           --resource-group "$AML_RG" \
           --query "[].version | max(@)" -o tsv)
         echo "version=$VER" >> $GITHUB_OUTPUT
-      env:
-        AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-        AML_RG: ${{ secrets.AML_RG }}
-
-    - name: Create endpoint (idempotent)
-      run: |
-        echo "Ensuring online endpoint iris-endpoint exists..."
-        az ml online-endpoint create \
-          --name iris-endpoint \
-          --resource-group "$AML_RG" \
-          --workspace-name "$AML_WORKSPACE" || true
       env:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
