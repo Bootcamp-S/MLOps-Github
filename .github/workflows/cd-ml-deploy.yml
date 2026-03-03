@@ -95,6 +95,17 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
+    - name: Create endpoint (idempotent)
+      run: |
+        echo "Ensuring online endpoint iris-endpoint exists..."
+        az ml online-endpoint create \
+          --name iris-endpoint \
+          --resource-group "$AML_RG" \
+          --workspace-name "$AML_WORKSPACE" || true
+      env:
+        AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+        AML_RG: ${{ secrets.AML_RG }}
+
     - name: Deploy as endpoint (blue)
       run: |
         sed -i "s/version: 1/version: ${{ steps.model.outputs.version }}/" aml-deploy/blue-deployment.yml
