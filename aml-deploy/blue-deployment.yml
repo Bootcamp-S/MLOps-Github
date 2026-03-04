@@ -2,9 +2,8 @@ $schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.sch
 name: blue
 endpoint_name: iris-endpoint-joshua
 model:
-  name: iris-model
-  version: 1            # wird im CD-Workflow ersetzt
+  path: ../models
   type: mlflow_model
-environment: azureml:mlflow-serve:1   # <- Referenz auf Environment-Asset
+environment: azureml:mlflow-serve:1
 instance_type: Standard_DS3_v2
 instance_count: 1
