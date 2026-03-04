@@ -52,7 +52,6 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # ⭐ ENDPOINT WIRD HIER ERSTELLT
     - name: Create endpoint (idempotent)
       run: |
         az ml online-endpoint create \
