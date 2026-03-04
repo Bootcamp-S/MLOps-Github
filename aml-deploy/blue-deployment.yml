@@ -3,9 +3,8 @@ name: blue
 endpoint_name: iris-endpoint-joshua
 model:
   name: iris-model
-  version: 1
+  version: 1            # wird im CD-Workflow ersetzt
   type: mlflow_model
-environment:
-  image: mcr.microsoft.com/azureml/mlflow:2.12-py310-cpu
+environment: azureml:mlflow-serve:1   # <- Referenz auf Environment-Asset
 instance_type: Standard_DS3_v2
 instance_count: 1
