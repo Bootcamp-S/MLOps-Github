@@ -17,20 +17,11 @@ concurrency:
 
 jobs:
   deploy-model:
-    # Condition vereinfacht: CI muss erfolgreich sein
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Show triggering workflow_run info
-      run: |
-        echo "Triggered by workflow: ${{ github.event.workflow_run.name }}"
-        echo "Conclusion:           ${{ github.event.workflow_run.conclusion }}"
-        echo "Event:                ${{ github.event.workflow_run.event }}"
-        echo "CI run-id:            ${{ github.event.workflow_run.id }}"
+    - uses: actions/checkout@v4
 
     - name: Azure Login
       uses: azure/login@v2
@@ -54,20 +45,16 @@ jobs:
         az ml model create \
           --name iris-model \
           --type mlflow_model \
-          --path ./models \
+          --path models \
           --workspace-name "$AML_WORKSPACE" \
           --resource-group "$AML_RG"
       env:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # -------------------------------------------------------------
-    # ⭐ WICHTIG: Der EINZIGE, KORREKT platzierte Create Endpoint Step
-    # -------------------------------------------------------------
-
-    - name: Create endpoint (idempotent)
+    # ⭐ EINZIGER UND RICHTIG PLATZIERTER CREATE-ENDPOINT STEP
+    - name: Create endpoint
       run: |
-        echo "Creating iris-endpoint if it does not exist..."
         az ml online-endpoint create \
           --name iris-endpoint \
           --workspace-name "$AML_WORKSPACE" \
@@ -75,8 +62,6 @@ jobs:
       env:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
-
-    # -------------------------------------------------------------
 
     - name: Resolve latest model version
       id: model
