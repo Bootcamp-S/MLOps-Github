@@ -1,15 +1,11 @@
 $schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
-
 name: blue
 endpoint_name: iris-endpoint-joshua
-
 model:
   name: iris-model
   version: 1
   type: mlflow_model
-
 environment:
-  image: mcr.microsoft.com/azureml/mlflow:latest
-
+  image: mcr.microsoft.com/azureml/mlflow:2.12-py310-cpu
 instance_type: Standard_DS3_v2
 instance_count: 1
