@@ -56,7 +56,7 @@ jobs:
     - name: Create endpoint
       run: |
         az ml online-endpoint create \
-          --name iris-endpoint \
+          --name iris-endpoint-test \
           --workspace-name "$AML_WORKSPACE" \
           --resource-group "$AML_RG" || true
       env:
