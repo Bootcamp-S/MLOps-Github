@@ -1,9 +1,9 @@
 name: CD-ML-Deploy
 
 on:
-  # Startet CD automatisch, wenn der CI-Workflow abgeschlossen ist
+  # CD startet automatisch nach erfolgreichem CI
   workflow_run:
-    workflows: ["CI-ML-Pipeline"]   # <- muss exakt dem name: deiner CI entsprechen
+    workflows: ["CI-ML-Pipeline"]   # <- muss exakt deinem CI-Workflow-Namen entsprechen
     types: [completed]
 
   # Optional: manuell startbar
@@ -19,7 +19,6 @@ concurrency:
 
 jobs:
   deploy-model:
-    # nur ausführen, wenn der CI-Run erfolgreich war
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
@@ -34,7 +33,7 @@ jobs:
       - name: Install Azure ML CLI
         run: az extension add -n ml -y
 
-      # Holt das MLflow-Artefakt aus dem neuesten erfolgreichen CI-Run
+      # Holt das MLflow-Artefakt (CI → CD)
       - name: Download MLflow model artifact
         uses: dawidd6/action-download-artifact@v6
         with:
@@ -43,19 +42,6 @@ jobs:
           path: models
           branch: main
           workflow_conclusion: success
-
-      # Registriert das MLflow-Modell aus ./models in Azure ML
-      - name: Register model
-        run: |
-          az ml model create \
-            --name iris-model \
-            --type mlflow_model \
-            --path models \
-            --workspace-name "$AML_WORKSPACE" \
-            --resource-group "$AML_RG"
-        env:
-          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-          AML_RG: ${{ secrets.AML_RG }}
 
       # Endpoint einmalig anlegen/absichern (idempotent)
       - name: Create endpoint (idempotent)
@@ -68,7 +54,7 @@ jobs:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
 
-      # MLflow-Environment als Azure-Asset anlegen (um fragile Inline-Image-Auflösung zu vermeiden)
+      # MLflow-Environment als Azure-Asset (stabiler als Inline-Image)
       - name: Ensure MLflow environment asset (idempotent)
         run: |
           az ml environment create \
@@ -81,34 +67,15 @@ jobs:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
 
-      # YAML zeigen (Debug) – damit wir immer sehen, was deployed wird
-      - name: Show deployment YAML (before sed)
+      # YAML anzeigen (Debug)
+      - name: Show deployment YAML (as used)
         run: |
-          echo "----- blue-deployment.yml (before) -----"
+          echo "----- aml-deploy/blue-deployment.yml -----"
           nl -ba aml-deploy/blue-deployment.yml
 
-      # Neueste Modellversion numerisch ermitteln (z. B. 20)
-      - name: Resolve latest model version (numeric)
-        id: model
-        run: |
-          VER=$(az ml model list \
-            --name iris-model \
-            --workspace-name "$AML_WORKSPACE" \
-            --resource-group "$AML_RG" \
-            --query "max_by([].{v: to_number(version)}, &v).v" -o tsv)
-          echo "Resolved model version = $VER"
-          echo "version=$VER" >> $GITHUB_OUTPUT
-        env:
-          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-          AML_RG: ${{ secrets.AML_RG }}
-
-      # 1) Deployment erstellen (ohne Traffic) – um CLI-Race-Condition zu vermeiden
+      # 1) Deployment erstellen (OHNE Traffic) – robust gegen CLI-Race-Conditions
       - name: Create deployment (blue, no traffic yet)
         run: |
-          sed -i "s/version: 1/version: ${{ steps.model.outputs.version }}/" aml-deploy/blue-deployment.yml
-          echo "----- blue-deployment.yml (after sed) -----"
-          nl -ba aml-deploy/blue-deployment.yml
-
           az ml online-deployment create \
             --file aml-deploy/blue-deployment.yml \
             --workspace-name "$AML_WORKSPACE" \
@@ -117,7 +84,7 @@ jobs:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
 
-      # Optional: Logs ziehen, falls Create-Deployment scheitert (hilft beim Debugging)
+      # Optional: Logs ziehen, falls Create-Deployment scheitert (Diagnose)
       - name: Get deployment logs (last 200 lines)
         if: failure()
         run: |
@@ -131,7 +98,7 @@ jobs:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
 
-      # 2) Traffic separat setzen (Workaround für 'NoneType.as_posix' bei kombinierten Operationen)
+      # 2) Traffic separat setzen (Workaround für as_posix-Fehler)
       - name: Set traffic to blue (100%)
         run: |
           az ml online-endpoint update \
