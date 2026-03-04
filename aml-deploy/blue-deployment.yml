@@ -1,14 +1,14 @@
 $schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
+
 name: blue
-endpoint_name: iris-endpoint-test
+endpoint_name: iris-endpoint-joshua   # deinen Endpointnamen hier anpassen
+
 model:
   name: iris-model
-  version: 1   # wird dynamisch ersetzt
-environment:
-  name: iris-sklearn-env
-  image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04
-code_configuration:
-  code: ../src
-  scoring_script: inference.py
-instance_type: Standard_DS2_v2
+  version: 1                          # wird im CD-Workflow dynamisch ersetzt
+  type: mlflow_model
+
+# MLflow braucht kein eigenes Scoring, kein Code, kein Environment.
+# Azure ML erzeugt automatisch ein serving environment.
+instance_type: Standard_DS3_v2        # stabil für MLflow Deployments
 instance_count: 1
