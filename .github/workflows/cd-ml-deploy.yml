@@ -52,11 +52,11 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # ⭐ EINZIGER UND RICHTIG PLATZIERTER CREATE-ENDPOINT STEP
-    - name: Create endpoint
+    # ⭐ ENDPOINT WIRD HIER ERSTELLT
+    - name: Create endpoint (idempotent)
       run: |
         az ml online-endpoint create \
-          --name iris-endpoint-test \
+          --name iris-endpoint-joshua \
           --workspace-name "$AML_WORKSPACE" \
           --resource-group "$AML_RG" || true
       env:
