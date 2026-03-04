@@ -5,7 +5,7 @@ endpoint_name: iris-endpoint-joshua
 
 model:
   name: iris-model
-  version: 1
+  version: 1          # wird im CD-Workflow dynamisch ersetzt
   type: mlflow_model
 
 environment:
