@@ -1,9 +1,13 @@
 $schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
 name: blue
 endpoint_name: iris-endpoint-joshua
+
 model:
   path: ../models
   type: mlflow_model
-environment: azureml:mlflow-serve:1
-instance_type: Standard_DS2_v2    # <— DS3_v2 -> DS2_v2 (oder F2s_v2 / E2s_v3)
+
+environment:
+  image: mcr.microsoft.com/azureml/mlflow-ubuntu20.04-py38-cpu-inference:latest
+
+instance_type: Standard_DS1_v2
 instance_count: 1
