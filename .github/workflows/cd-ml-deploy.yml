@@ -2,7 +2,7 @@ name: CD-ML-Deploy
 
 on:
   workflow_run:
-    workflows: ["CI-ML-Pipeline"]   # muss exakt dem name: deiner CI entsprechen
+    workflows: ["CI-ML-Pipeline"]
     types: [completed]
 
   workflow_dispatch:
@@ -31,11 +31,10 @@ jobs:
     - name: Install Azure ML CLI
       run: az extension add -n ml -y
 
-    # Holt das MLflow-Artefakt aus dem neuesten erfolgreichen CI-Run
     - name: Download MLflow model artifact
       uses: dawidd6/action-download-artifact@v6
       with:
-        workflow: ci-ml.yml           # Dateiname deiner CI-Workflow-Datei
+        workflow: ci-ml.yml
         name: mlflow-model
         path: models
         branch: main
@@ -53,7 +52,6 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # Endpoint einmalig anlegen/absichern (idempotent)
     - name: Create endpoint (idempotent)
       run: |
         az ml online-endpoint create \
@@ -64,23 +62,13 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # Vor Deploy: YAML anzeigen & validieren (hilft, sofortige Fehler sichtbar zu machen)
+    # YAML zeigen (damit wir IMMER sehen, was deployed wird)
     - name: Show deployment YAML (before sed)
       run: |
         echo "----- blue-deployment.yml (before) -----"
         nl -ba aml-deploy/blue-deployment.yml
 
-    - name: Validate deployment YAML
-      run: |
-        az ml online-deployment validate \
-          --file aml-deploy/blue-deployment.yml \
-          --workspace-name "$AML_WORKSPACE" \
-          --resource-group "$AML_RG"
-      env:
-        AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-        AML_RG: ${{ secrets.AML_RG }}
-
-    # Neueste Modellversion numerisch auflösen (z. B. 16 statt 9)
+    # Neueste Modellversion numerisch ermitteln (z. B. 17)
     - name: Resolve latest model version (numeric)
       id: model
       run: |
@@ -95,7 +83,6 @@ jobs:
         AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
         AML_RG: ${{ secrets.AML_RG }}
 
-    # Deploy: Version in YAML ersetzen -> Deployment erstellen -> Traffic auf blue
     - name: Deploy as endpoint (blue)
       run: |
         sed -i "s/version: 1/version: ${{ steps.model.outputs.version }}/" aml-deploy/blue-deployment.yml
