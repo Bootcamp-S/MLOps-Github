@@ -5,8 +5,7 @@ dependencies:
   - python=3.10
   - pip
   - pip:
-      - mlflow
+      - mlflow>=2.8
       - scikit-learn==1.7.2
       - cloudpickle
       - numpy
-``
