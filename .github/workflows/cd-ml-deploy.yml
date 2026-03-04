@@ -67,7 +67,8 @@ jobs:
             --name blue \
             --endpoint-name iris-endpoint-joshua \
             --workspace-name "$AML_WORKSPACE" \
-            --resource-group "$AML_RG" || true
+            --resource-group "$AML_RG" \
+            --yes || true
         env:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
