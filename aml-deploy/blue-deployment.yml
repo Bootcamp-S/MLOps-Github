@@ -1,6 +1,6 @@
 $schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
 name: blue
-endpoint_name: iris-endpoint
+endpoint_name: iris-endpoint-test
 model:
   name: iris-model
   version: 1   # wird dynamisch ersetzt
