@@ -1,12 +1,10 @@
 name: CD-ML-Deploy
 
 on:
-  # CD startet automatisch nach erfolgreichem CI
   workflow_run:
-    workflows: ["CI-ML-Pipeline"]   # <- muss exakt deinem CI-Workflow-Namen entsprechen
+    workflows: ["CI-ML-Pipeline"]
     types: [completed]
 
-  # Optional: manuell startbar
   workflow_dispatch:
 
 permissions:
@@ -33,79 +31,70 @@ jobs:
       - name: Install Azure ML CLI
         run: az extension add -n ml -y
 
-      # Holt das MLflow-Artefakt (CI → CD)
+      # LOAD MODEL ARTIFACT
       - name: Download MLflow model artifact
         uses: dawidd6/action-download-artifact@v6
         with:
-          workflow: ci-ml.yml           # <- Dateiname deiner CI-Workflow-Datei
+          workflow: ci-ml.yml
           name: mlflow-model
           path: models
           branch: main
           workflow_conclusion: success
 
-      # Endpoint einmalig anlegen/absichern (idempotent)
+      # ENSURE ENDPOINT EXISTS
       - name: Create endpoint (idempotent)
         run: |
           az ml online-endpoint create \
             --name iris-endpoint-joshua \
             --workspace-name "$AML_WORKSPACE" \
             --resource-group "$AML_RG" || true
-        env:
-          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-          AML_RG: ${{ secrets.AML_RG }}
+        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
 
-      # MLflow-Environment als Azure-Asset (stabiler als Inline-Image)
-      - name: Ensure MLflow environment asset (idempotent)
+      # ENVIRONMENT ASSET
+      - name: Ensure MLflow environment asset
         run: |
           az ml environment create \
             --name mlflow-serve \
             --version 1 \
-            --image mcr.microsoft.com/azureml/mlflow:2.12-py310-cpu \
+            --image mcr.microsoft.com/azureml/mlflow-ubuntu20.04-py38-cpu-inference:latest \
             --workspace-name "$AML_WORKSPACE" \
             --resource-group "$AML_RG" || true
-        env:
-          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-          AML_RG: ${{ secrets.AML_RG }}
+        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
 
-      # YAML anzeigen (Debug)
-      - name: Show deployment YAML (as used)
+      # DELETE OLD DEPLOYMENT (blue)
+      - name: Delete broken deployment (blue)
         run: |
-          echo "----- aml-deploy/blue-deployment.yml -----"
+          az ml online-deployment delete \
+            --name blue \
+            --endpoint-name iris-endpoint-joshua \
+            --workspace-name "$AML_WORKSPACE" \
+            --resource-group "$AML_RG" || true
+        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
+
+      # SHOW YAML
+      - name: Show deployment YAML
+        run: |
+          echo "----- blue-deployment.yml -----"
           nl -ba aml-deploy/blue-deployment.yml
 
-      # 1) Deployment erstellen (OHNE Traffic) – robust gegen CLI-Race-Conditions
-      - name: Create deployment (blue, no traffic yet)
+      # CREATE NEW DEPLOYMENT (GREEN)
+      - name: Create new deployment (green)
         run: |
-          az ml online-deployment update \
-            --file aml-deploy/blue-deployment.yml \
+          cp aml-deploy/blue-deployment.yml aml-deploy/green-deployment.yml
+          sed -i "s/name: blue/name: green/" aml-deploy/green-deployment.yml
+
+          az ml online-deployment create \
+            --file aml-deploy/green-deployment.yml \
             --workspace-name "$AML_WORKSPACE" \
             --resource-group "$AML_RG"
-        env:
-          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-          AML_RG: ${{ secrets.AML_RG }}
+        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
 
-      # Optional: Logs ziehen, falls Create-Deployment scheitert (Diagnose)
-      - name: Get deployment logs (last 200 lines)
-        if: failure()
-        run: |
-          az ml online-deployment get-logs \
-            --name blue \
-            --endpoint iris-endpoint-joshua \
-            --workspace-name "$AML_WORKSPACE" \
-            --resource-group "$AML_RG" \
-            --lines 200 || true
-        env:
-          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-          AML_RG: ${{ secrets.AML_RG }}
-
-      # 2) Traffic separat setzen (Workaround für as_posix-Fehler)
-      - name: Set traffic to blue (100%)
+      # SET TRAFFIC TO GREEN
+      - name: Route traffic to green
         run: |
           az ml online-endpoint update \
             --name iris-endpoint-joshua \
-            --traffic blue=100 \
+            --traffic green=100 \
             --workspace-name "$AML_WORKSPACE" \
             --resource-group "$AML_RG"
-        env:
-          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-          AML_RG: ${{ secrets.AML_RG }}
+        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
