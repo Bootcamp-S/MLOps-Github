@@ -4,7 +4,6 @@ on:
   workflow_run:
     workflows: ["CI-ML-Pipeline"]
     types: [completed]
-
   workflow_dispatch:
 
 permissions:
@@ -31,7 +30,6 @@ jobs:
       - name: Install Azure ML CLI
         run: az extension add -n ml -y
 
-      # LOAD MODEL ARTIFACT
       - name: Download MLflow model artifact
         uses: dawidd6/action-download-artifact@v6
         with:
@@ -41,16 +39,16 @@ jobs:
           branch: main
           workflow_conclusion: success
 
-      # ENSURE ENDPOINT EXISTS
       - name: Create endpoint (idempotent)
         run: |
           az ml online-endpoint create \
             --name iris-endpoint-joshua \
             --workspace-name "$AML_WORKSPACE" \
             --resource-group "$AML_RG" || true
-        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
+        env:
+          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+          AML_RG: ${{ secrets.AML_RG }}
 
-      # ENVIRONMENT ASSET
       - name: Ensure MLflow environment asset
         run: |
           az ml environment create \
@@ -59,9 +57,10 @@ jobs:
             --image mcr.microsoft.com/azureml/mlflow-ubuntu20.04-py38-cpu-inference:latest \
             --workspace-name "$AML_WORKSPACE" \
             --resource-group "$AML_RG" || true
-        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
+        env:
+          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+          AML_RG: ${{ secrets.AML_RG }}
 
-      # DELETE OLD DEPLOYMENT (blue)
       - name: Delete broken deployment (blue)
         run: |
           az ml online-deployment delete \
@@ -69,15 +68,15 @@ jobs:
             --endpoint-name iris-endpoint-joshua \
             --workspace-name "$AML_WORKSPACE" \
             --resource-group "$AML_RG" || true
-        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
+        env:
+          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+          AML_RG: ${{ secrets.AML_RG }}
 
-      # SHOW YAML
       - name: Show deployment YAML
         run: |
           echo "----- blue-deployment.yml -----"
           nl -ba aml-deploy/blue-deployment.yml
 
-      # CREATE NEW DEPLOYMENT (GREEN)
       - name: Create new deployment (green)
         run: |
           cp aml-deploy/blue-deployment.yml aml-deploy/green-deployment.yml
@@ -87,9 +86,10 @@ jobs:
             --file aml-deploy/green-deployment.yml \
             --workspace-name "$AML_WORKSPACE" \
             --resource-group "$AML_RG"
-        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
+        env:
+          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+          AML_RG: ${{ secrets.AML_RG }}
 
-      # SET TRAFFIC TO GREEN
       - name: Route traffic to green
         run: |
           az ml online-endpoint update \
@@ -97,4 +97,6 @@ jobs:
             --traffic green=100 \
             --workspace-name "$AML_WORKSPACE" \
             --resource-group "$AML_RG"
-        env: { AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}, AML_RG: ${{ secrets.AML_RG }} }
+        env:
+          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+          AML_RG: ${{ secrets.AML_RG }}
