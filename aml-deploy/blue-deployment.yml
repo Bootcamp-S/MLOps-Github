@@ -8,7 +8,7 @@ model:
   type: mlflow_model
 
 environment:
-  conda_file: environment.yml
+  conda_file: ../models/conda.yaml
   image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04
 
 instance_type: Standard_E2s_v3
