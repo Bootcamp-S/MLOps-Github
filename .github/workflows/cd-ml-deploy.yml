@@ -3,7 +3,7 @@ name: CD-ML-Deploy
 on:
   # CD startet automatisch nach erfolgreichem CI
   workflow_run:
-    workflows: ["CI-ML-Pipeline"]   # <- muss exakt dem 'name:' deiner CI entsprechen
+    workflows: ["CI-ML-Pipeline"]   # <- exakt wie in deiner CI (name:)
     types: [completed]
 
   # Optional: manuell startbar
@@ -19,7 +19,6 @@ concurrency:
 
 jobs:
   deploy-model:
-    # nur ausführen, wenn der CI-Run erfolgreich war
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
@@ -34,7 +33,7 @@ jobs:
       - name: Install Azure ML CLI
         run: az extension add -n ml -y
 
-      # Holt das MLflow-Artefakt aus dem neuesten erfolgreichen CI-Run
+      # Holt das MLflow-Artefakt (aus CI)
       - name: Download MLflow model artifact
         uses: dawidd6/action-download-artifact@v6
         with:
@@ -55,20 +54,7 @@ jobs:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
 
-      # MLflow-Environment als Azure-Asset (idempotent)
-      - name: Ensure MLflow environment asset
-        run: |
-          az ml environment create \
-            --name mlflow-serve \
-            --version 1 \
-            --image mcr.microsoft.com/azureml/mlflow-ubuntu20.04-py38-cpu-inference:latest \
-            --workspace-name "$AML_WORKSPACE" \
-            --resource-group "$AML_RG" || true
-        env:
-          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
-          AML_RG: ${{ secrets.AML_RG }}
-
-      # Debug: vorhandene Deployments anzeigen
+      # Debug: welche Deployments existieren aktuell?
       - name: List current deployments (debug)
         run: |
           az ml online-deployment list \
@@ -79,8 +65,8 @@ jobs:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
 
-      # Defekte/alte Deployments sicher löschen (non-interactive)
-      - name: Delete deployment green if exists (idempotent, non-interactive)
+      # Altes green/blue vorab löschen (idempotent, non-interactive)
+      - name: Delete deployment green if exists (idempotent)
         run: |
           az ml online-deployment delete \
             --name green \
@@ -92,7 +78,7 @@ jobs:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
 
-      - name: Delete deployment blue if exists (idempotent, non-interactive)
+      - name: Delete deployment blue if exists (idempotent)
         run: |
           az ml online-deployment delete \
             --name blue \
@@ -104,16 +90,23 @@ jobs:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
 
-      # YAML zeigen (zur Kontrolle)
-      - name: Show deployment YAML
+      # Debug: zeig die Deployment-YAML
+      - name: Show deployment YAML (blue)
         run: |
-          echo "----- blue-deployment.yml -----"
+          echo "----- aml-deploy/blue-deployment.yml -----"
           nl -ba aml-deploy/blue-deployment.yml
+
+      # Debug: zeig die MLflow-Umgebung aus dem Artefakt (conda.yaml)
+      - name: Show MLflow conda.yaml (from model artifact)
+        run: |
+          echo "----- models/conda.yaml -----"
+          nl -ba models/conda.yaml || true
 
       # Neues Deployment 'green' anlegen (aus der blue-Vorlage)
       - name: Create new deployment (green)
         run: |
           cp aml-deploy/blue-deployment.yml aml-deploy/green-deployment.yml
+          # Stelle sicher, dass der Name auf 'green' geändert wird:
           sed -i "s/^name: blue$/name: green/" aml-deploy/green-deployment.yml
 
           az ml online-deployment create \
@@ -124,7 +117,33 @@ jobs:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
 
-      # Traffic auf green umschalten (100%)
+      # Falls das Create scheitert: Container-Logs & Status dumpen (wichtige Diagnose)
+      - name: Get deployment logs (last 400 lines)
+        if: failure()
+        run: |
+          az ml online-deployment get-logs \
+            --name green \
+            --endpoint iris-endpoint-joshua \
+            --workspace-name "$AML_WORKSPACE" \
+            --resource-group "$AML_RG" \
+            --lines 400 || true
+        env:
+          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+          AML_RG: ${{ secrets.AML_RG }}
+
+      - name: Show deployment state (debug)
+        if: failure()
+        run: |
+          az ml online-deployment show \
+            --name green \
+            --endpoint iris-endpoint-joshua \
+            --workspace-name "$AML_WORKSPACE" \
+            --resource-group "$AML_RG" -o json
+        env:
+          AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
+          AML_RG: ${{ secrets.AML_RG }}
+
+      # Traffic auf green (100 %)
       - name: Route traffic to green
         run: |
           az ml online-endpoint update \
@@ -135,4 +154,3 @@ jobs:
         env:
           AML_WORKSPACE: ${{ secrets.AML_WORKSPACE }}
           AML_RG: ${{ secrets.AML_RG }}
-
