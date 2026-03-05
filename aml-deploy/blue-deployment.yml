@@ -7,7 +7,5 @@ model:
   path: ../models
   type: mlflow_model
 
-environment: azureml://registries/azureml/environments/mlflow-py312-inference/versions/30
-
 instance_type: Standard_E2s_v3
 instance_count: 1
