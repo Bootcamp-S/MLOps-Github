@@ -8,8 +8,10 @@ model:
   type: mlflow_model
 
 environment:
+  # Nutze die conda.yaml aus dem MLflow-Artefakt (siehe dein Logdump)
   conda_file: ../models/conda.yaml
-  image: mcr.microsoft.com/azureml/mlflow-inference:latest
+  # Unterstütztes, prebuilt AzureML-Inference-Image (enthält azureml-inference-server-http)
+  image: mcr.microsoft.com/azureml/minimal-ubuntu22.04-py39-cpu-inference:latest
 
 instance_type: Standard_E2s_v3
 instance_count: 1
