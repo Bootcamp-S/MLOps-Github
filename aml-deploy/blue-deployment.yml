@@ -9,7 +9,7 @@ model:
 
 environment:
   conda_file: ../models/conda.yaml
-  image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04
+  image: mcr.microsoft.com/azureml/mlflow-ubuntu20.04-py310-cpu-inference:latest
 
 instance_type: Standard_E2s_v3
 instance_count: 1
