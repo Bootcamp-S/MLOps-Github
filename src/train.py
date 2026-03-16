@@ -29,25 +29,38 @@ def train():
 
     # --- 3) Accuracy berechnen ---
     acc = accuracy_score(y_test, model.predict(X_test))
-    print(f"Model accuracy: {acc}")
+    print(f"Model accuracy: {acc:.4f}")
 
-    # --- 4) Zielverzeichnis "models/" vorbereiten ---
-    out_dir = "models"
+    # --- 4) MLflow-Run starten und Modell LOGGEN ---
+    # Erzeugt ein vollwertiges MLflow-Modell unter: mlruns/<run_id>/artifacts/model
+    with mlflow.start_run() as run:
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            artifact_path="model"   # -> artifacts/model/ (mit MLmodel, conda.yaml, Flavors)
+        )
+        run_id = run.info.run_id
+        print(f"MLflow run_id: {run_id}")
 
-    # Lokalen Ordner löschen falls vorhanden (GitHub Actions braucht sauberen Ordner)
-    if os.path.exists(out_dir):
-        shutil.rmtree(out_dir)
+    # --- 5) Artefakt für CI/CD nach ./models materialisieren ---
+    # Deine CD erwartet das Modell in ./models
+    src_path = os.path.join("mlruns", run_id, "artifacts", "model")
+    dst_path = "models"
 
-    # --- 5) MLflow-Modell speichern ---
-    # Wichtig: dieses save_model erzeugt die komplette MLflow-Struktur,
-    # die später im CD-Schritt registriert werden kann.
-    mlflow.sklearn.save_model(
-        sk_model=model,
-        path=out_dir
-    )
+    # Sauberer Ordner für GitHub Actions
+    if os.path.exists(dst_path):
+        shutil.rmtree(dst_path)
 
-    print(f"MLflow model saved to: {out_dir}")
+    shutil.copytree(src_path, dst_path)
+
+    # Optional: kleine Sichtprüfung
+    expected_files = ["MLmodel", "conda.yaml"]
+    missing = [f for f in expected_files if not os.path.exists(os.path.join(dst_path, f))]
+    if missing:
+        print(f"Warnung: Folgende erwartete Dateien fehlen in '{dst_path}': {missing}")
+    else:
+        print(f"MLflow model materialized to: {dst_path} (inkl. MLmodel & conda.yaml)")
 
 
 if __name__ == "__main__":
     train()
+``
