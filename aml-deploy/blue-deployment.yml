@@ -7,14 +7,18 @@ model:
   path: ../models
   type: mlflow_model
 
-# Liveness/Readiness großzügig einstellen (Build + Install dauern oft > 2-4 Minuten)
+# Health Probes an den tatsächlichen Server-Port 31311 anpassen
 liveness_probe:
-  initial_delay: 300        # Sekunden bis zum ersten Health-Check
-  period: 10                # alle 10s prüfen
-  timeout: 5                # 5s Timeout pro Probe
-  failure_threshold: 60     # bis zu 60 Fehlschläge tolerieren
+  path: /
+  port: 31311
+  initial_delay: 300       # Wartezeit vor erster Prüfung (Sekunden)
+  period: 10
+  timeout: 5
+  failure_threshold: 60
 
 readiness_probe:
+  path: /
+  port: 31311
   initial_delay: 300
   period: 10
   timeout: 5
@@ -26,3 +30,4 @@ request_settings:
 
 instance_type: Standard_E2s_v3
 instance_count: 1
+``
