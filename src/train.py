@@ -32,27 +32,30 @@ def train():
     print(f"Model accuracy: {acc:.4f}")
 
     # --- 4) MLflow-Run starten und Modell LOGGEN ---
-    # Erzeugt ein vollwertiges MLflow-Modell unter: mlruns/<run_id>/artifacts/model
+    # Artefakt wird unter: mlruns/<experiment_id>/<run_id>/artifacts/model abgelegt
     with mlflow.start_run() as run:
         mlflow.sklearn.log_model(
             sk_model=model,
-            artifact_path="model"   # -> artifacts/model/ (mit MLmodel, conda.yaml, Flavors)
+            artifact_path="model"   # (Hinweis: Warnung bzgl. 'artifact_path' ist bekannt; kompatibel)
         )
         run_id = run.info.run_id
+        artifact_uri = mlflow.get_artifact_uri("model")
         print(f"MLflow run_id: {run_id}")
+        print(f"Artifact URI: {artifact_uri}")
 
-    # --- 5) Artefakt für CI/CD nach ./models materialisieren ---
-    # Deine CD erwartet das Modell in ./models
-    src_path = os.path.join("mlruns", run_id, "artifacts", "model")
+    # --- 5) Artefakt sauber nach ./models materialisieren ---
+    # Verwende MLflow, um die geloggten Artefakte lokal herunterzuladen (korrekter Pfad inkl. experiment_id)
+    local_model_dir = mlflow.artifacts.download_artifacts(artifact_uri=artifact_uri)
+
+    # Zielordner für CI/CD
     dst_path = "models"
-
-    # Sauberer Ordner für GitHub Actions
     if os.path.exists(dst_path):
         shutil.rmtree(dst_path)
 
-    shutil.copytree(src_path, dst_path)
+    # Kopiere den kompletten MLflow-Modelldir (mit MLmodel, conda.yaml, Flavors, model.pkl)
+    shutil.copytree(local_model_dir, dst_path)
 
-    # Optional: kleine Sichtprüfung
+    # Optional: Mini-Check
     expected_files = ["MLmodel", "conda.yaml"]
     missing = [f for f in expected_files if not os.path.exists(os.path.join(dst_path, f))]
     if missing:
