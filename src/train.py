@@ -32,27 +32,26 @@ def train():
     print(f"Model accuracy: {acc:.4f}")
 
     # --- 4) MLflow-Run starten und Modell LOGGEN ---
-    # Artefakt wird unter: mlruns/<experiment_id>/<run_id>/artifacts/model abgelegt
+    # Hinweis: Ab MLflow 3.x ist 'artifact_path' deprecated. Verwende 'name'.
     with mlflow.start_run() as run:
         mlflow.sklearn.log_model(
             sk_model=model,
-            artifact_path="model"   # (Hinweis: Warnung bzgl. 'artifact_path' ist bekannt; kompatibel)
+            name="model"  # erzeugt artifacts unter .../artifacts/model/
         )
         run_id = run.info.run_id
-        artifact_uri = mlflow.get_artifact_uri("model")
         print(f"MLflow run_id: {run_id}")
-        print(f"Artifact URI: {artifact_uri}")
 
-    # --- 5) Artefakt sauber nach ./models materialisieren ---
-    # Verwende MLflow, um die geloggten Artefakte lokal herunterzuladen (korrekter Pfad inkl. experiment_id)
-    local_model_dir = mlflow.artifacts.download_artifacts(artifact_uri=artifact_uri)
+        # --- 5) Artefakt sauber nach ./models materialisieren ---
+        # Nutze die 'run_id' + 'artifact_path', NICHT den rohen artifact_uri-String.
+        local_model_dir = mlflow.artifacts.download_artifacts(
+            run_id=run_id,
+            artifact_path="model"
+        )
 
-    # Zielordner für CI/CD
     dst_path = "models"
     if os.path.exists(dst_path):
         shutil.rmtree(dst_path)
 
-    # Kopiere den kompletten MLflow-Modelldir (mit MLmodel, conda.yaml, Flavors, model.pkl)
     shutil.copytree(local_model_dir, dst_path)
 
     # Optional: Mini-Check
@@ -66,3 +65,4 @@ def train():
 
 if __name__ == "__main__":
     train()
+``
