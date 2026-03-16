@@ -7,5 +7,22 @@ model:
   path: ../models
   type: mlflow_model
 
+# Liveness/Readiness großzügig einstellen (Build + Install dauern oft > 2-4 Minuten)
+liveness_probe:
+  initial_delay: 300        # Sekunden bis zum ersten Health-Check
+  period: 10                # alle 10s prüfen
+  timeout: 5                # 5s Timeout pro Probe
+  failure_threshold: 60     # bis zu 60 Fehlschläge tolerieren
+
+readiness_probe:
+  initial_delay: 300
+  period: 10
+  timeout: 5
+  failure_threshold: 60
+
+request_settings:
+  request_timeout_ms: 15000
+  max_concurrent_requests_per_instance: 1
+
 instance_type: Standard_E2s_v3
 instance_count: 1
