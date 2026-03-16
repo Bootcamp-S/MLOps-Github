@@ -19,4 +19,3 @@ with mlflow.start_run():
     mlflow.log_metric("acc", model.score(X_test, y_test))
 
 # Optional: Artefakt aus dem Run exportieren (CI-Schritt), z. B. nach ./models/
-``
