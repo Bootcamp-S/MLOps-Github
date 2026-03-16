@@ -7,9 +7,9 @@ model:
   path: ../models
   type: mlflow_model
 
-# Nur Timing-Felder erlaubt (Schema v2) – KEIN path/port
+# Nur Timing-Felder – KEIN path/port, die sind im v2-Schema nicht erlaubt
 liveness_probe:
-  initial_delay: 300      # gib dem Container Zeit, conda/pip zu installieren
+  initial_delay: 300
   period: 10
   timeout: 5
   failure_threshold: 60
