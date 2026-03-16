@@ -7,18 +7,14 @@ model:
   path: ../models
   type: mlflow_model
 
-# Health Probes an den tatsächlichen Server-Port 31311 anpassen
+# Nur Timing-Felder erlaubt (Schema v2) – KEIN path/port
 liveness_probe:
-  path: /
-  port: 31311
-  initial_delay: 300       # Wartezeit vor erster Prüfung (Sekunden)
+  initial_delay: 300      # gib dem Container Zeit, conda/pip zu installieren
   period: 10
   timeout: 5
   failure_threshold: 60
 
 readiness_probe:
-  path: /
-  port: 31311
   initial_delay: 300
   period: 10
   timeout: 5
